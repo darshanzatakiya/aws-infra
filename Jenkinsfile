@@ -80,6 +80,116 @@
         
 //     }
 // }
+
+// pipeline {
+//     agent any
+
+//     parameters {
+//         booleanParam(name: 'PLAN_TERRAFORM', defaultValue: false, description: 'Run Terraform plan')
+//         booleanParam(name: 'APPLY_TERRAFORM', defaultValue: false, description: 'Run Terraform apply')
+//         booleanParam(name: 'DESTROY_TERRAFORM', defaultValue: false, description: 'Destroy Terraform infrastructure')
+//         booleanParam(name: 'UPDATE_FLASK_APP', defaultValue: false, description: 'Update Flask App on existing EC2 instance')
+//     }
+
+//     stages {
+
+//         stage('Clone Repository') {
+//             steps {
+//                 deleteDir() // Clean workspace
+//                 git branch: 'main', url: 'https://github.com/darshanzatakiya/aws-infra.git'
+//                 sh "ls -lart"
+//             }
+//         }
+
+//         stage('Terraform Init') {
+//             steps {
+//                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
+//                     dir('infra') {
+//                         sh 'echo "================= Terraform Init =================="'
+//                         sh 'terraform init'
+//                     }
+//                 }
+//             }
+//         }
+
+//         stage('Terraform Plan') {
+//             steps {
+//                 script {
+//                     if (params.PLAN_TERRAFORM) {
+//                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
+//                             dir('infra') {
+//                                 sh 'echo "================= Terraform Plan =================="'
+//                                 sh 'terraform plan'
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+
+//         stage('Terraform Apply') {
+//             steps {
+//                 script {
+//                     if (params.APPLY_TERRAFORM) {
+//                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
+//                             dir('infra') {
+//                                 sh 'echo "================= Terraform Apply =================="'
+//                                 sh 'terraform apply -auto-approve'
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+
+//         stage('Update Flask App on EC2') {
+//             steps {
+//                 script {
+//                     if (params.UPDATE_FLASK_APP || params.APPLY_TERRAFORM) {
+//                         sshagent(['ubuntu-key']) {
+//                             sh '''
+//                                 echo "================= Deploying Flask App =================="
+//                                 EC2_IP=54.93.219.181
+//                                 echo "Connecting to EC2: $EC2_IP"
+
+//                                 ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" ubuntu@$EC2_IP << 'EOF'
+//                                     cd /home/ubuntu
+//                                     yes | sudo apt update
+//                                     yes | sudo apt install python3 python3-pip -y
+//                                     pkill -f app.py || true
+//                                     rm -rf flask-app
+//                                     git clone https://github.com/darshanzatakiya/flask-app.git
+//                                     cd flask-app
+//                                     pip3 install -r requirements.txt
+//                                     setsid python3 -u app.py &
+//                                     echo "✅ Flask App Updated Successfully!"
+//                                 EOF
+//                             '''
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+
+//         stage('Terraform Destroy') {
+//             steps {
+//                 script {
+//                     if (params.DESTROY_TERRAFORM) {
+//                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
+//                             dir('infra') {
+//                                 sh 'echo "================= Terraform Destroy =================="'
+//                                 sh 'terraform destroy -auto-approve'
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+
+//     }
+// }
+
+
 pipeline {
     agent any
 
@@ -96,6 +206,7 @@ pipeline {
             steps {
                 deleteDir()
                 git branch: 'main', url: 'https://github.com/darshanzatakiya/aws-infra.git'
+                sh "ls -lart"
             }
         }
 
@@ -103,6 +214,7 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                     dir('infra') {
+                        sh 'echo "================= Terraform Init =================="'
                         sh 'terraform init'
                     }
                 }
@@ -115,6 +227,7 @@ pipeline {
                     if (params.PLAN_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
+                                sh 'echo "================= Terraform Plan =================="'
                                 sh 'terraform plan'
                             }
                         }
@@ -129,6 +242,7 @@ pipeline {
                     if (params.APPLY_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
+                                sh 'echo "================= Terraform Apply =================="'
                                 sh 'terraform apply -auto-approve'
                             }
                         }
@@ -137,35 +251,14 @@ pipeline {
             }
         }
 
-        stage('Update Flask App on EC2') {
+        stage('Deploy / Update Flask App') {
             steps {
                 script {
                     if (params.UPDATE_FLASK_APP || params.APPLY_TERRAFORM) {
-                        sshagent(['ubuntu']) { // your existing SSH credential ID
+                        sshagent(['ubuntu']) {
                             sh '''
-                            EC2_IP=54.93.219.181
-                            echo "Deploying Flask App to $EC2_IP"
-
-                            ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
-                                cd /home/ubuntu
-                                yes | sudo apt update
-                                yes | sudo apt install python3 python3-pip -y
-
-                                if [ -d "flask-app" ]; then
-                                    cd flask-app
-                                    git reset --hard
-                                    git pull
-                                else
-                                    git clone https://github.com/darshanzatakiya/flask-app.git
-                                    cd flask-app
-                                fi
-
-                                pip3 install -r requirements.txt
-                                pkill -f app.py || true
-                                setsid python3 -u app.py &
-
-                                echo "✅ Flask App Updated Successfully!"
-                            EOF
+                                echo "================= Deploying Flask App =================="
+                                ssh -o StrictHostKeyChecking=no ubuntu@54.93.219.181 "bash -s" < template/ec2_install_apache.sh
                             '''
                         }
                     }
@@ -179,6 +272,7 @@ pipeline {
                     if (params.DESTROY_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
+                                sh 'echo "================= Terraform Destroy =================="'
                                 sh 'terraform destroy -auto-approve'
                             }
                         }
