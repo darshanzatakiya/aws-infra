@@ -48,42 +48,74 @@
 
 
 #!/bin/bash
+#! /bin/bash
+# ------------------------------
+# Automated setup for Flask app
+# ------------------------------
 
-# Go to home
+# Move to home directory
 cd /home/ubuntu
 
-# Update and install dependencies
+# Update packages
 yes | sudo apt update
-yes | sudo apt install -y python3 python3-pip git nginx
+yes | sudo apt upgrade -y
 
-# Clone your repo (or pull if already exists)
-if [ -d "aws-infra" ]; then
-    cd aws-infra
+# Install Python3, pip, git, and virtualenv
+yes | sudo apt install python3 python3-pip git python3-venv -y
+
+# Install Nginx
+yes | sudo apt install nginx -y
+
+# Clone the Flask app repo (or pull if already exists)
+if [ -d "flask-app" ]; then
+    cd flask-app
     git pull
 else
-    git clone https://github.com/darshanzatakiya/aws-infra.git
-    cd aws-infra
+    git clone https://github.com/darshanzatakiya/flask-app.git
+    cd flask-app
 fi
 
-# Go to your Flask app directory
-cd python-mysql-db-proj-1
+# Set up Python virtual environment
+python3 -m venv venv
+source venv/bin/activate
 
 # Install Python dependencies
-pip3 install --upgrade pip
-pip3 install -r requirements.txt
-pip3 install gunicorn
+pip install --upgrade pip
+pip install -r requirements.txt
 
-# Set permissions (optional)
-sudo chown -R ubuntu:ubuntu /home/ubuntu/aws-infra
+# ------------------------------
+# Run Flask app with Gunicorn
+# ------------------------------
+# Create systemd service to manage app
+SERVICE_FILE=/etc/systemd/system/flask-app.service
 
-# Stop any existing Gunicorn processes
-pkill gunicorn || true
+sudo bash -c "cat > $SERVICE_FILE" <<EOL
+[Unit]
+Description=Gunicorn instance to serve Flask app
+After=network.target
 
-# Run Flask app using Gunicorn in the background
-nohup gunicorn -w 4 -b 0.0.0.0:8000 app:app > app.log 2>&1 &
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/flask-app
+Environment="PATH=/home/ubuntu/flask-app/venv/bin"
+ExecStart=/home/ubuntu/flask-app/venv/bin/gunicorn --workers 3 --bind 0.0.0.0:8000 app:app
 
-# Configure Nginx as reverse proxy
-sudo tee /etc/nginx/sites-available/flask_app <<EOF
+[Install]
+WantedBy=multi-user.target
+EOL
+
+# Reload systemd and start the service
+sudo systemctl daemon-reload
+sudo systemctl start flask-app
+sudo systemctl enable flask-app
+
+# ------------------------------
+# Configure Nginx to proxy requests
+# ------------------------------
+NGINX_FILE=/etc/nginx/sites-available/flask-app
+
+sudo bash -c "cat > $NGINX_FILE" <<EOL
 server {
     listen 80;
     server_name _;
@@ -96,11 +128,11 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
-EOF
+EOL
 
-# Enable site and restart Nginx
-sudo ln -sf /etc/nginx/sites-available/flask_app /etc/nginx/sites-enabled
+# Enable Nginx site and restart Nginx
+sudo ln -sf /etc/nginx/sites-available/flask-app /etc/nginx/sites-enabled
 sudo nginx -t
 sudo systemctl restart nginx
 
-echo "Flask app deployed successfully. Check your URL."
+echo "Deployment completed! Your Flask app should be available on port 80."
