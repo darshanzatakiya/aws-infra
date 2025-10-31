@@ -96,7 +96,6 @@ pipeline {
             steps {
                 deleteDir()
                 git branch: 'main', url: 'https://github.com/darshanzatakiya/aws-infra.git'
-                sh "ls -lart"
             }
         }
 
@@ -104,7 +103,6 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                     dir('infra') {
-                        sh 'echo "================= Terraform Init =================="'
                         sh 'terraform init'
                     }
                 }
@@ -117,7 +115,6 @@ pipeline {
                     if (params.PLAN_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
-                                sh 'echo "================= Terraform Plan =================="'
                                 sh 'terraform plan'
                             }
                         }
@@ -132,7 +129,6 @@ pipeline {
                     if (params.APPLY_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
-                                sh 'echo "================= Terraform Apply =================="'
                                 sh 'terraform apply -auto-approve'
                             }
                         }
@@ -145,11 +141,10 @@ pipeline {
             steps {
                 script {
                     if (params.UPDATE_FLASK_APP || params.APPLY_TERRAFORM) {
-                        sshagent(['ubuntu']) { // Use your existing SSH credential ID here
+                        sshagent(['ubuntu']) { // your existing SSH credential ID
                             sh '''
                             EC2_IP=54.93.219.181
-                            echo "================= Deploying Flask App =================="
-                            echo "Connecting to EC2: $EC2_IP"
+                            echo "Deploying Flask App to $EC2_IP"
 
                             ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
                                 cd /home/ubuntu
@@ -160,15 +155,14 @@ pipeline {
                                     cd flask-app
                                     git reset --hard
                                     git pull
-                                    pip3 install -r requirements.txt
-                                    pkill -f app.py || true
-                                    setsid python3 -u app.py &
                                 else
                                     git clone https://github.com/darshanzatakiya/flask-app.git
                                     cd flask-app
-                                    pip3 install -r requirements.txt
-                                    setsid python3 -u app.py &
                                 fi
+
+                                pip3 install -r requirements.txt
+                                pkill -f app.py || true
+                                setsid python3 -u app.py &
 
                                 echo "✅ Flask App Updated Successfully!"
                             EOF
@@ -185,7 +179,6 @@ pipeline {
                     if (params.DESTROY_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
-                                sh 'echo "================= Terraform Destroy =================="'
                                 sh 'terraform destroy -auto-approve'
                             }
                         }
