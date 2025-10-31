@@ -18,7 +18,7 @@ resource "aws_db_instance" "default" {
   allocated_storage       = 20
   storage_type            = "gp3"                 # Newer and more efficient storage
   engine                  = "mysql"
-  engine_version          = "8.0.36"              # ✅ Latest supported MySQL version
+  engine_version          = "8.0.42"              # ✅ Latest supported MySQL version
   instance_class          = "db.t3.micro"         # ✅ Supported, free-tier eligible
   identifier              = var.mysql_db_identifier
   username                = var.mysql_username
