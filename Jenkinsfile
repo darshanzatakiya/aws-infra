@@ -85,9 +85,8 @@ pipeline {
 
     parameters {
         booleanParam(name: 'PLAN_TERRAFORM', defaultValue: false, description: 'Run Terraform plan')
-        booleanParam(name: 'APPLY_TERRAFORM', defaultValue: false, description: 'Run Terraform apply')
+        booleanParam(name: 'APPLY_TERRAFORM', defaultValue: false, description: 'Run Terraform apply and deploy Flask app')
         booleanParam(name: 'DESTROY_TERRAFORM', defaultValue: false, description: 'Destroy Terraform infrastructure')
-        booleanParam(name: 'UPDATE_FLASK_APP', defaultValue: false, description: 'Update Flask App on existing EC2 instance')
     }
 
     stages {
@@ -126,35 +125,27 @@ pipeline {
             }
         }
 
-        stage('Terraform Apply') {
+        stage('Terraform Apply & Deploy Flask App') {
             steps {
                 script {
                     if (params.APPLY_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
-                                sh 'echo "================= Terraform Apply =================="'
-                                sh 'terraform apply -auto-approve'
-                            }
-                        }
-                    }
-                }
-            }
-        }
+                                // Apply Terraform
+                                sh '''
+                                echo "================= Terraform Apply =================="
+                                terraform apply -auto-approve
+                                '''
 
-        stage('Update Flask App on EC2') {
-            steps {
-                script {
-                    if (params.UPDATE_FLASK_APP || params.APPLY_TERRAFORM) {
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
-                            sh '''
-                            echo "================= Updating Flask App =================="
-                            
-                            # Check if Terraform output exists
-                            if terraform -chdir=infra output -json | jq -e '.ec2_public_ip' >/dev/null; then
-                                EC2_IP=$(terraform -chdir=infra output -raw ec2_public_ip)
+                                // Deploy Flask app
+                                sh '''
+                                echo "================= Deploying Flask App =================="
+
+                                # Get EC2 public IP
+                                EC2_IP=$(terraform output -raw ec2_public_ip)
                                 echo "Connecting to EC2: $EC2_IP"
 
-                                ssh -o StrictHostKeyChecking=no -i "jenkins_demo.pem" ubuntu@$EC2_IP << 'EOF'
+                                ssh -o StrictHostKeyChecking=no -i "../jenkins_demo.pem" ubuntu@$EC2_IP << 'EOF'
                                     cd /home/ubuntu
                                     yes | sudo apt update
                                     yes | sudo apt install python3 python3-pip -y
@@ -173,13 +164,10 @@ pipeline {
                                         setsid python3 -u app.py &
                                     fi
 
-                                    echo "✅ Flask App Updated Successfully!"
+                                    echo "✅ Flask App Deployed Successfully!"
                                 EOF
-                            else
-                                echo "❌ Terraform output 'ec2_public_ip' not found. Please run Terraform Apply first."
-                                exit 1
-                            fi
-                            '''
+                                '''
+                            }
                         }
                     }
                 }
