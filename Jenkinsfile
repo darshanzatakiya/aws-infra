@@ -94,9 +94,7 @@ pipeline {
 
         stage('Clone Repository') {
             steps {
-                // Clean workspace before cloning
-                deleteDir()
-                // Clone the Git repository
+                deleteDir() // Clean workspace
                 git branch: 'main', url: 'https://github.com/darshanzatakiya/aws-infra.git'
                 sh "ls -lart"
             }
@@ -106,10 +104,8 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                     dir('infra') {
-                        sh '''
-                        echo "================= Terraform Init =================="
-                        terraform init
-                        '''
+                        sh 'echo "================= Terraform Init =================="'
+                        sh 'terraform init'
                     }
                 }
             }
@@ -121,10 +117,8 @@ pipeline {
                     if (params.PLAN_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
-                                sh '''
-                                echo "================= Terraform Plan =================="
-                                terraform plan
-                                '''
+                                sh 'echo "================= Terraform Plan =================="'
+                                sh 'terraform plan'
                             }
                         }
                     }
@@ -138,10 +132,8 @@ pipeline {
                     if (params.APPLY_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
-                                sh '''
-                                echo "================= Terraform Apply =================="
-                                terraform apply -auto-approve
-                                '''
+                                sh 'echo "================= Terraform Apply =================="'
+                                sh 'terraform apply -auto-approve'
                             }
                         }
                     }
@@ -153,11 +145,10 @@ pipeline {
             steps {
                 script {
                     if (params.UPDATE_FLASK_APP || params.APPLY_TERRAFORM) {
-                        // Use Jenkins SSH credentials (replace 'ec2-ssh-key' with your actual credentials ID)
-                        sshagent(['ec2-ssh-key']) {
+                        sshagent(['ubuntu']) { // use your old credential ID
                             sh '''
                             echo "================= Deploying Flask App =================="
-                            EC2_IP="54.93.219.181"
+                            EC2_IP=54.93.219.181
                             echo "Connecting to EC2: $EC2_IP"
 
                             ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
@@ -194,10 +185,8 @@ pipeline {
                     if (params.DESTROY_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
-                                sh '''
-                                echo "================= Terraform Destroy =================="
-                                terraform destroy -auto-approve
-                                '''
+                                sh 'echo "================= Terraform Destroy =================="'
+                                sh 'terraform destroy -auto-approve'
                             }
                         }
                     }
