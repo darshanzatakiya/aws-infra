@@ -80,7 +80,6 @@
         
 //     }
 // }
-
 pipeline {
     agent any
 
@@ -95,9 +94,7 @@ pipeline {
 
         stage('Clone Repository') {
             steps {
-                // Clean workspace before cloning
                 deleteDir()
-                // Clone the Git repository
                 git branch: 'main', url: 'https://github.com/darshanzatakiya/aws-infra.git'
                 sh "ls -lart"
             }
@@ -151,30 +148,37 @@ pipeline {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             sh '''
                             echo "================= Updating Flask App =================="
-                            EC2_IP=$(terraform -chdir=infra output -raw ec2_public_ip)
-                            echo "Connecting to EC2: $EC2_IP"
+                            
+                            # Check if Terraform output exists
+                            if terraform -chdir=infra output -json | jq -e '.ec2_public_ip' >/dev/null; then
+                                EC2_IP=$(terraform -chdir=infra output -raw ec2_public_ip)
+                                echo "Connecting to EC2: $EC2_IP"
 
-                            ssh -o StrictHostKeyChecking=no -i "jenkins_demo.pem" ubuntu@$EC2_IP << 'EOF'
-                                cd /home/ubuntu
-                                yes | sudo apt update
-                                yes | sudo apt install python3 python3-pip -y
+                                ssh -o StrictHostKeyChecking=no -i "jenkins_demo.pem" ubuntu@$EC2_IP << 'EOF'
+                                    cd /home/ubuntu
+                                    yes | sudo apt update
+                                    yes | sudo apt install python3 python3-pip -y
 
-                                if [ -d "flask-app" ]; then
-                                    cd flask-app
-                                    git reset --hard
-                                    git pull
-                                    pip3 install -r requirements.txt
-                                    pkill -f app.py || true
-                                    setsid python3 -u app.py &
-                                else
-                                    git clone https://github.com/darshanzatakiya/flask-app.git
-                                    cd flask-app
-                                    pip3 install -r requirements.txt
-                                    setsid python3 -u app.py &
-                                fi
+                                    if [ -d "flask-app" ]; then
+                                        cd flask-app
+                                        git reset --hard
+                                        git pull
+                                        pip3 install -r requirements.txt
+                                        pkill -f app.py || true
+                                        setsid python3 -u app.py &
+                                    else
+                                        git clone https://github.com/darshanzatakiya/flask-app.git
+                                        cd flask-app
+                                        pip3 install -r requirements.txt
+                                        setsid python3 -u app.py &
+                                    fi
 
-                                echo "✅ Flask App Updated Successfully!"
-                            EOF
+                                    echo "✅ Flask App Updated Successfully!"
+                                EOF
+                            else
+                                echo "❌ Terraform output 'ec2_public_ip' not found. Please run Terraform Apply first."
+                                exit 1
+                            fi
                             '''
                         }
                     }
@@ -198,4 +202,3 @@ pipeline {
         }
     }
 }
-
