@@ -106,8 +106,10 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                     dir('infra') {
-                        sh 'echo "================= Terraform Init =================="'
-                        sh 'terraform init'
+                        sh '''
+                        echo "================= Terraform Init =================="
+                        terraform init
+                        '''
                     }
                 }
             }
@@ -119,8 +121,10 @@ pipeline {
                     if (params.PLAN_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
-                                sh 'echo "================= Terraform Plan =================="'
-                                sh 'terraform plan'
+                                sh '''
+                                echo "================= Terraform Plan =================="
+                                terraform plan
+                                '''
                             }
                         }
                     }
@@ -134,8 +138,10 @@ pipeline {
                     if (params.APPLY_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
-                                sh 'echo "================= Terraform Apply =================="'
-                                sh 'terraform apply -auto-approve'
+                                sh '''
+                                echo "================= Terraform Apply =================="
+                                terraform apply -auto-approve
+                                '''
                             }
                         }
                     }
@@ -147,36 +153,36 @@ pipeline {
             steps {
                 script {
                     if (params.UPDATE_FLASK_APP || params.APPLY_TERRAFORM) {
-                        sh '''
-                        echo "================= Deploying Flask App =================="
+                        // Use Jenkins SSH credentials (replace 'ec2-ssh-key' with your actual credentials ID)
+                        sshagent(['ec2-ssh-key']) {
+                            sh '''
+                            echo "================= Deploying Flask App =================="
+                            EC2_IP="54.93.219.181"
+                            echo "Connecting to EC2: $EC2_IP"
 
-                        # Hardcoded EC2 IP
-                        EC2_IP="54.93.219.181"
-                        echo "Connecting to EC2: $EC2_IP"
+                            ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
+                                cd /home/ubuntu
+                                yes | sudo apt update
+                                yes | sudo apt install python3 python3-pip -y
 
-                        # SSH and deploy Flask app
-                        ssh -o StrictHostKeyChecking=no -i "jenkins_demo.pem" ubuntu@$EC2_IP << 'EOF'
-                            cd /home/ubuntu
-                            yes | sudo apt update
-                            yes | sudo apt install python3 python3-pip -y
+                                if [ -d "flask-app" ]; then
+                                    cd flask-app
+                                    git reset --hard
+                                    git pull
+                                    pip3 install -r requirements.txt
+                                    pkill -f app.py || true
+                                    setsid python3 -u app.py &
+                                else
+                                    git clone https://github.com/darshanzatakiya/flask-app.git
+                                    cd flask-app
+                                    pip3 install -r requirements.txt
+                                    setsid python3 -u app.py &
+                                fi
 
-                            if [ -d "flask-app" ]; then
-                                cd flask-app
-                                git reset --hard
-                                git pull
-                                pip3 install -r requirements.txt
-                                pkill -f app.py || true
-                                setsid python3 -u app.py &
-                            else
-                                git clone https://github.com/darshanzatakiya/flask-app.git
-                                cd flask-app
-                                pip3 install -r requirements.txt
-                                setsid python3 -u app.py &
-                            fi
-
-                            echo "✅ Flask App Updated Successfully!"
-                        EOF
-                        '''
+                                echo "✅ Flask App Updated Successfully!"
+                            EOF
+                            '''
+                        }
                     }
                 }
             }
@@ -188,8 +194,10 @@ pipeline {
                     if (params.DESTROY_TERRAFORM) {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials-bd']]) {
                             dir('infra') {
-                                sh 'echo "================= Terraform Destroy =================="'
-                                sh 'terraform destroy -auto-approve'
+                                sh '''
+                                echo "================= Terraform Destroy =================="
+                                terraform destroy -auto-approve
+                                '''
                             }
                         }
                     }
