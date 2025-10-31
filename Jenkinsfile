@@ -78,13 +78,12 @@
 //         }
 //     }
 // }
-
 pipeline {
     agent any
 
     triggers {
-        // Automatically run when new commit is pushed to main branch
-        pollSCM('H/5 * * * *') // checks every 5 mins — can be adjusted
+        // Automatically run every 5 minutes to detect repo changes
+        pollSCM('H/5 * * * *')
     }
 
     stages {
@@ -102,9 +101,10 @@ pipeline {
                     dir('infra') {
                         sh '''
                         echo "================= Terraform Init =================="
-                        terraform init
+                        terraform init -input=false
+                        
                         echo "================= Terraform Apply =================="
-                        terraform apply -auto-approve
+                        terraform apply -auto-approve -input=false
                         '''
                     }
                 }
@@ -117,27 +117,33 @@ pipeline {
                     dir('infra') {
                         sh '''
                         echo "================= Updating Flask App on EC2 =================="
-
+                        
+                        # Get EC2 public IP from Terraform output
                         EC2_IP=$(terraform output -raw ec2_public_ip)
                         echo "EC2 IP: $EC2_IP"
 
+                        # Connect to EC2 and deploy Flask app
                         ssh -o StrictHostKeyChecking=no -i "../jenkins_demo.pem" ubuntu@$EC2_IP << 'EOF'
+                            set -e
                             cd /home/ubuntu
+                            
                             yes | sudo apt update
-                            yes | sudo apt install python3 python3-pip -y
+                            yes | sudo apt install python3 python3-pip git -y
 
                             if [ -d "flask-app" ]; then
                                 cd flask-app
-                                git reset --hard
-                                git pull
+                                git fetch --all
+                                git reset --hard origin/main
                             else
                                 git clone https://github.com/darshanzatakiya/flask-app.git
                                 cd flask-app
                             fi
 
                             pip3 install -r requirements.txt
+
+                            # Restart Flask app
                             pkill -f app.py || true
-                            setsid python3 -u app.py &
+                            nohup python3 -u app.py > app.log 2>&1 &
                             echo "✅ Flask App Deployed Successfully!"
                         EOF
                         '''
