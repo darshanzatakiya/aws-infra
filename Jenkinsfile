@@ -94,7 +94,7 @@ pipeline {
 
         stage('Clone Repository') {
             steps {
-                deleteDir() // Clean workspace
+                deleteDir()
                 git branch: 'main', url: 'https://github.com/darshanzatakiya/aws-infra.git'
                 sh "ls -lart"
             }
@@ -145,10 +145,10 @@ pipeline {
             steps {
                 script {
                     if (params.UPDATE_FLASK_APP || params.APPLY_TERRAFORM) {
-                        sshagent(['ubuntu']) { // use your old credential ID
+                        sshagent(['ubuntu']) { // Use your existing SSH credential ID here
                             sh '''
-                            echo "================= Deploying Flask App =================="
                             EC2_IP=54.93.219.181
+                            echo "================= Deploying Flask App =================="
                             echo "Connecting to EC2: $EC2_IP"
 
                             ssh -o StrictHostKeyChecking=no ubuntu@$EC2_IP << 'EOF'
