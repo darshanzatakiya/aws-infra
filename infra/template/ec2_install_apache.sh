@@ -1,5 +1,5 @@
-! /bin/bash
-shellcheck disable=SC2164
+#! /bin/bash
+#shellcheck disable=SC2164
 cd /home/ubuntu
 yes | sudo apt update
 yes | sudo apt install python3 python3-pip
